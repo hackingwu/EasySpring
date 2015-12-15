@@ -110,19 +110,14 @@ public class ConditionBridge {
             }
         }
         if (fieldType != null) {//处理列的查询
-            if (fieldType.equals(Integer.class) || fieldType.equals(int.class)) {
-                valueObj = Integer.valueOf(value);
-            } else if (fieldType.equals(Boolean.class)) {
-                valueObj = Boolean.valueOf(value);
+            if (fieldType.equals(Integer.class) || fieldType.equals(int.class)|| fieldType.equals(Boolean.class)||fieldType.equals(boolean.class)
+                    ||fieldType.equals(Long.class) || fieldType.equals(long.class)||fieldType.equals(Float.class) || fieldType.equals(float.class)
+                    ||fieldType.equals(Double.class) || fieldType.equals(double.class)) {
+                Method valueOfMethod = fieldType.getMethod("valueOf",String.class);
+                valueObj = valueOfMethod.invoke(fieldType,value);
             } else if (fieldType.equals(Date.class)) {
                 DateTime dateTime = new DateTime(Long.valueOf(value.toString()));
                 valueObj = dateTime.toDate();
-            } else if (fieldType.equals(Long.class) || fieldType.equals(long.class)) {
-                valueObj = Long.valueOf(value);
-            } else if (fieldType.equals(Float.class) || fieldType.equals(float.class)) {
-                valueObj = Float.valueOf(value);
-            } else if (fieldType.equals(Double.class) || fieldType.equals(double.class)) {
-                valueObj = Double.valueOf(value);
             }
         }
         return new Condition(field,Operator.valueOf(operator),valueObj);

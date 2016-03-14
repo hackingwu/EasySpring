@@ -1,20 +1,28 @@
-package cn.hackingwu.search;
+/* =============================================================
+ * Created: [2015/8/3 15:37] by wuzj(971643)
+ * =============================================================
+ *
+ * Copyright 2014-2015 NetDragon Websoft Inc. All Rights Reserved
+ *
+ * =============================================================
+ */
+package com.nd.activity.search;
 
+import com.nd.activity.util.CommonUtil;
+import com.nd.activity.util.StringUtil;
 import org.joda.time.DateTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.annotation.Transient;
 import org.springframework.data.mongodb.core.query.Criteria;
-import cn.hackingwu.util.StringUtil;
 
 import javax.servlet.http.HttpServletRequest;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.Iterator;
-import java.util.List;
+import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * ----------------------------
@@ -27,16 +35,17 @@ import java.util.List;
  *  Criteria
  *  解耦HttpServletRequest和Criteria，把request从查询中抽离出去
  * -------------------------------
- * @author hackingwu.
- * @since 2015/08/17
+ * @author wuzj(971643).
+ * @since v0.2
  */
 public class ConditionBridge {
 
     private static Logger logger = LoggerFactory.getLogger(ConditionBridge.class);
 
-    public static Condition getConditionFromRequest(HttpServletRequest request,Class clazz) throws Exception{
-        String filter = StringUtil.AorB(request.getParameter("cn/hackingwu/filter"), request.getParameter("$cn.hackingwu.filter"));
-        return processQuery(filter,clazz);
+    public static Condition getConditionFromRequest(HttpServletRequest request,Class clazz) throws Exception {
+        String filter = StringUtil.AorB(request.getParameter("filter"), request.getParameter("$filter"));
+        if(!StringUtil.isEmpty(filter))  filter = StringUtil.escapeSpecialWord(filter);
+        return processQuery1(filter, clazz);
     }
 
     public static Condition processQuery(String query,Class clazz) throws Exception{
@@ -51,7 +60,7 @@ public class ConditionBridge {
                 String right = query.substring(pos + joinWord.length()).trim();
                 Condition leftCondition = processQuery(left, clazz);
                 Condition rightCondition = processQuery(right, clazz);
-                List<Condition> conditions = new ArrayList();
+                List<Condition> conditions = new ArrayList<>();
                 if (leftCondition != null) conditions.add(leftCondition);
                 if (rightCondition != null) conditions.add(rightCondition);
                 if (!conditions.isEmpty()){
@@ -63,10 +72,46 @@ public class ConditionBridge {
         return null;
     }
 
+    /**
+     * 减少嵌套1
+     * @param query
+     * @param clazz
+     * @return
+     * @throws Exception
+     */
+    public static Condition processQuery1(String query, Class clazz) throws Exception{
+        Condition condition = null;
+        if (!StringUtil.isEmpty(query)) {
+            Pattern pattern = Pattern.compile("(\\band\\b)|(\\bor\\b)");
+            String[] result = pattern.split(query);
+            Matcher matcher = pattern.matcher(query);
+            String lastMatch = null;
+            String currentMatch;
+            int i = 0;
+            Condition temp;
+            condition = getConditionFromQueryStr(result[i++].trim(), clazz);
+            for (; matcher.find(); i++, lastMatch = currentMatch){
+                currentMatch = matcher.group();
+                temp = getConditionFromQueryStr(result[i].trim(), clazz);
+                if (!currentMatch.equals(lastMatch)) {
+                    if ("and".equals(currentMatch)) {
+                        condition = new Condition().and(temp, condition);
+                    } else if ("or".equals(currentMatch)) {
+                        condition = new Condition().or(temp , condition);
+                    }
+                } else {
+                    if ("and".equals(currentMatch)) condition.and(temp);
+                    else if("or".equals(currentMatch)) condition.or(temp);
+                }
+            }
+        }
+        return condition;
+    }
+
     public static Condition getConditionFromQueryStr(String queryStr,Class clazz) throws Exception{
         String[] filterValues = queryStr.split("\\s+");
         if (filterValues.length == 3){
-            return buildCondition(StringUtil.underscore2Camel(filterValues[0]), filterValues[1], filterValues[2], clazz);
+            return buildCondition(CommonUtil.underscoreToCamel(filterValues[0]), filterValues[1], filterValues[2], clazz);
         }
         if (filterValues.length > 3){
             StringBuffer tempValue = new StringBuffer();
@@ -74,7 +119,7 @@ public class ConditionBridge {
             for (int i = 3; i < filterValues.length; i++) {
                 tempValue.append(filterValues[i]);
             }
-            return buildCondition(StringUtil.underscore2Camel(filterValues[0]), filterValues[1], tempValue.toString(), clazz);
+            return buildCondition(CommonUtil.underscoreToCamel(filterValues[0]), filterValues[1], tempValue.toString(), clazz);
         }
         return null;
     }
@@ -82,8 +127,8 @@ public class ConditionBridge {
     public static Condition buildCondition(String field,String operator,String value,Class clazz) throws Exception{
         Object valueObj = value;
         Class fieldType = null;
-        if (field.indexOf(".") > -1) {//处理map中的查询
-            int pos = field.indexOf("(");
+        if (field.indexOf("/") > -1) {//处理map中的查询.直接用'.'会被转义
+            int pos = field.indexOf("<");
             if (pos > -1) {
                 String type = field.substring(pos + 1, pos + 2);
                 if (type.equalsIgnoreCase("I")) {//Integer类型
@@ -98,6 +143,7 @@ public class ConditionBridge {
                     fieldType = Long.class;
                 }
                 field = field.substring(0, pos);
+                field = field.replace('/', '.');    //将前面Map字段与key连接符号'/'替换成'.'
             }
         } else {
             try {
@@ -110,52 +156,76 @@ public class ConditionBridge {
             }
         }
         if (fieldType != null) {//处理列的查询
-            if (fieldType.equals(Integer.class) || fieldType.equals(int.class)|| fieldType.equals(Boolean.class)||fieldType.equals(boolean.class)
-                    ||fieldType.equals(Long.class) || fieldType.equals(long.class)||fieldType.equals(Float.class) || fieldType.equals(float.class)
-                    ||fieldType.equals(Double.class) || fieldType.equals(double.class)) {
-                Method valueOfMethod = fieldType.getMethod("valueOf",String.class);
-                valueObj = valueOfMethod.invoke(fieldType,value);
-            } else if (fieldType.equals(Date.class)) {
-                DateTime dateTime = new DateTime(Long.valueOf(value.toString()));
-                valueObj = dateTime.toDate();
+            if (operator.equals(Operator.in.getValue())){
+                String[] ss = value.split(",");
+                valueObj = new ArrayList();
+                for (int i = 0 ;i < ss.length ;i++){
+                    ((List)valueObj).add(convert(ss[i],fieldType));
+                }
+            }else{
+                valueObj = convert(value,fieldType);
             }
+            return new Condition(field,Operator.valueOf(operator),valueObj);
         }
-        return new Condition(field,Operator.valueOf(operator),valueObj);
+        return null;
     }
 
+    public static Object convert(String value,Class fieldType){
+        Object valueObj = value;
+        if (fieldType.equals(Integer.class) || fieldType.equals(int.class)) {
+            valueObj = Integer.valueOf(value);
+        } else if (fieldType.equals(Boolean.class)) {
+            valueObj = Boolean.valueOf(value);
+        } else if (fieldType.equals(Date.class)) {
+            DateTime dateTime = new DateTime(Long.valueOf(value.toString()));
+            valueObj = dateTime.toDate();
+        } else if (fieldType.equals(Long.class) || fieldType.equals(long.class)) {
+            valueObj = Long.valueOf(value);
+        } else if (fieldType.equals(Float.class) || fieldType.equals(float.class)) {
+            valueObj = Float.valueOf(value);
+        } else if (fieldType.equals(Double.class) || fieldType.equals(double.class)) {
+            valueObj = Double.valueOf(value);
+        }
+        return valueObj;
+    }
 
     public static Criteria toCriteria(Condition condition) throws NoSuchMethodException, InvocationTargetException, IllegalAccessException {
         Criteria criteria = new Criteria();
-        if (condition.selfCondition()){
-            criteria = Criteria.where(condition.getProperty());
-            Operator operator = condition.getOperator();
-            Method operatorMethod = null;
-            if (operator.equals(Operator.like)){
-                operatorMethod = Criteria.class.getDeclaredMethod(operator.getValue(), String.class);
-            }else{
-                operatorMethod = Criteria.class.getDeclaredMethod(operator.getValue(), Object.class);
+        if (condition != null){
+            if (condition.selfCondition()){
+                criteria = Criteria.where(condition.getProperty());
+                Operator operator = condition.getOperator();
+                Method operatorMethod = null;
+                if (operator.equals(Operator.like)){
+                    operatorMethod = Criteria.class.getDeclaredMethod(operator.getValue(), String.class);
+                }else if(operator.equals(Operator.in)){
+                    operatorMethod = Criteria.class.getDeclaredMethod(operator.getValue(),Collection.class);
+                }else{
+                    operatorMethod = Criteria.class.getDeclaredMethod(operator.getValue(), Object.class);
+                }
+                operatorMethod.invoke(criteria,condition.getValue());
             }
-            operatorMethod.invoke(criteria,condition.getValue());
-        }
-        List<Condition> andConditionChain = condition.getAndConditionChain();
-        if (andConditionChain != null && andConditionChain.size() > 0){
-            List<Criteria> andCriterias = toCriteria(andConditionChain);
-            criteria.andOperator(andCriterias.toArray(new Criteria[andCriterias.size()]));
-        }
-        List<Condition> orConditionChain = condition.getOrConditionChain();
-        if (orConditionChain != null && orConditionChain.size() > 0){
-            List<Criteria> orCriterias = toCriteria(orConditionChain);
-            criteria.orOperator(orCriterias.toArray(new Criteria[orCriterias.size()]));
+            List<Condition> andConditionChain = condition.getAndConditionChain();
+            if (andConditionChain != null && andConditionChain.size() > 0){
+                List<Criteria> andCriterias = toCriteria(andConditionChain);
+                criteria.andOperator(andCriterias.toArray(new Criteria[andCriterias.size()]));
+            }
+            List<Condition> orConditionChain = condition.getOrConditionChain();
+            if (orConditionChain != null && orConditionChain.size() > 0){
+                List<Criteria> orCriterias = toCriteria(orConditionChain);
+                criteria.orOperator(orCriterias.toArray(new Criteria[orCriterias.size()]));
+            }
         }
         return criteria;
     }
 
     public static List<Criteria> toCriteria(List<Condition> conditions) throws NoSuchMethodException, IllegalAccessException, InvocationTargetException {
-        List<Criteria> criterias = new ArrayList();
+        List<Criteria> criterias = new ArrayList<>();
         if (conditions != null && !conditions.isEmpty()) {
             Iterator<Condition> iterator = conditions.iterator();
             while(iterator.hasNext()){
-                criterias.add(toCriteria(iterator.next()));
+                Condition condition = iterator.next();
+                if (condition != null) criterias.add(toCriteria(condition));
             }
         }
         return criterias;

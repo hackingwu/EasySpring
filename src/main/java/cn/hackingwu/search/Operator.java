@@ -19,8 +19,8 @@ public enum Operator {
     ge("gte"),
     lt("lt"),
     le("lte"),
-    ne("ne")
-    ;
+    ne("ne"),
+    in("in");
     private String value;
     Operator(String value){
         this.value = value;

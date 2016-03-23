@@ -6,10 +6,10 @@
  *
  * =============================================================
  */
-package com.nd.activity.search;
+package cn.hackingwu.search;
 
-import com.nd.activity.util.CommonUtil;
-import com.nd.activity.util.StringUtil;
+import cn.hackingwu.util.CommonUtil;
+import cn.hackingwu.util.StringUtil;
 import org.joda.time.DateTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

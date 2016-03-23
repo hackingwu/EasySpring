@@ -105,4 +105,17 @@ public class StringUtil {
         }
         return underscore.toString();
     }
+
+    public static String escapeSpecialWord(String spcWord) {
+        if (!spcWord.isEmpty()) {
+            String[] fbsArr = { "\\", "$", "(", ")", "*", "+", ".", "[", "]", "?", "^", "{", "}", "|"};
+            for (String key : fbsArr) {
+                if (spcWord.contains(key)) {
+                    spcWord = spcWord.replace(key, "\\" + key);
+                }
+            }
+        }
+        return spcWord;
+    }
+
 }

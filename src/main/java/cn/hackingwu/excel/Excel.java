@@ -50,11 +50,23 @@ public class Excel {
         return workbook;
     }
 
+    public void setSheetName(String sheetName) {
+        this.sheetName = sheetName;
+    }
+
+    public void setSheet(Sheet sheet) {
+        this.sheet = sheet;
+    }
+
     public Sheet getSheet() throws IOException {
         if (sheet == null){
             sheet = getWorkbook().getSheet(sheetName);
         }
         return sheet;
+    }
+
+    public void setContent(List<List> content) {
+        this.content = content;
     }
 
     public List<List> getContent() throws IOException {
@@ -75,8 +87,13 @@ public class Excel {
                         Cell cell = row.getCell(j);
                         if (cell == null) rowList.add("");
                         else{
-                            cell.setCellType(Cell.CELL_TYPE_STRING);
-                            rowList.add(cell.getStringCellValue());
+                            try{
+                                cell.setCellType(Cell.CELL_TYPE_STRING);
+                                rowList.add(cell.getStringCellValue());
+                            }catch (Exception e){
+                                e.printStackTrace();
+                                rowList.add("");
+                            }
                         }
                     }
                     content.add(rowList);

@@ -116,9 +116,9 @@ public class Excel {
         return contentHeader;
     }
 
-
-
-
+    public void setContentHeader(List<String> contentHeader) {
+        this.contentHeader = contentHeader;
+    }
 
     public ExcelType getType() {
         return type;

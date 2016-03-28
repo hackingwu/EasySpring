@@ -14,24 +14,25 @@ public class ExcelProcessor {
     private Excel excel;
 
     private Map<String,String> labels ;//无序,【“活动”:"activity"】
-    private List<String> fields;
-
-    private List getFields() throws IOException {
-        fields = new ArrayList();
+    private Map<Integer,String> orderLabels;
+    private Map<Integer,String> getOrderLabels() throws IOException {
+        orderLabels = new HashMap<Integer, String>();
         List<String> excelHeader = excel.getContentHeader();
         Iterator i$ = excelHeader.iterator();
+        int i = 0;
         while(i$.hasNext()){
             String header = (String)i$.next();
             if (labels.containsKey(header))
-                fields.add(labels.get(header));
+                orderLabels.put(i, labels.get(header));
+            i++;
         }
-        return fields;
+        return orderLabels;
     }
 
     public ExcelProcessor(Excel excel,Map labels) throws IOException {
         this.excel = excel;
         this.labels = labels;
-        fields = getFields();
+        orderLabels = getOrderLabels();
     }
 
 
@@ -43,12 +44,15 @@ public class ExcelProcessor {
             List rowContent = i$.next();
             Map map = new HashMap();
             boolean allBlank = true;
-            for(int i = 0 ;i < fields.size();i++){
-                Object value = rowContent.get(i);
+            Set<Integer> keySet = orderLabels.keySet();
+            Iterator<Integer> keySetIterator = keySet.iterator();
+            while (keySetIterator.hasNext()) {
+                Integer key = keySetIterator.next();
+                Object value = rowContent.get(key);
                 if (value.getClass().equals(String.class)&& !StringUtil.isEmpty((String)value) ){
                     allBlank = false;
                 }
-                map.put(fields.get(i), value);
+                map.put(orderLabels.get(key), value);
             }
             if (!allBlank) contentMap.add(map);
         }

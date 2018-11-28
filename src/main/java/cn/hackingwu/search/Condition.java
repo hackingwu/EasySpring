@@ -45,14 +45,14 @@ public class Condition {
 
     public Condition or(String property, Operator operator, Object value) {
         Condition condition =  new Condition(property,operator,value,null,null);
-        condition.orConditionChain.add(this);
-        return condition;
+        this.orConditionChain.add(condition);
+        return this;
     }
 
     public Condition and(String property, Operator operator, Object value){
         Condition condition =  new Condition(property,operator,value,null,null);
-        condition.andConditionChain.add(this);
-        return condition;
+        this.andConditionChain.add(condition);
+        return this;
     }
 
     public Condition or(List<Condition> conditions){
